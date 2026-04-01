@@ -11,7 +11,12 @@ Usage:
 """
 
 import sys
-sys.path = ['/n/home07/slucchini/software/PTS'] + sys.path
+import os
+import argparse
+
+pts_path = os.environ.get("PTS_PATH")
+if pts_path:
+    sys.path.insert(0, pts_path)
 
 import numpy as np
 import h5py
@@ -23,19 +28,10 @@ import astropy.units as u
 
 from project import make_projection
 
-# ── Paths ──────────────────────────────────────────────────────────────────
-SKIRT_FITS   = "../I5_output/smuggle_zoom_total.fits"
-EMISSIVITY_H5 = "emissivity_snap190.h5"
-OUT_FIG       = "validation_comparison.png"
 
-# Face-on instrument parameters (from smuggle.ski)
-FO_DISTANCE_MPC = 1.0    # "fo" instrument at 1 Mpc
-FO_FOV_KPC      = 10.0   # fieldOfViewX = 4e4 pc = 40 kpc
-
-
-def load_skirt_f770w():
+def load_skirt_f770w(fits_path):
     """Load SKIRT datacube and convolve with MIRI F770W filter."""
-    with fits.open(SKIRT_FITS) as hdul:
+    with fits.open(fits_path) as hdul:
         data = hdul[0].data     # (nwav, ny, nx) in MJy/sr
         nwav = hdul[0].header["NAXIS3"]
         npix = hdul[0].header["NAXIS1"]
@@ -62,18 +58,31 @@ def load_skirt_f770w():
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Validate cell emissivity against SKIRT F770W face-on output")
+    parser.add_argument("--skirt", default="../I5_output/smuggle_zoom_total.fits",
+                        help="SKIRT datacube FITS file")
+    parser.add_argument("--emissivity", default="emissivity_snap190.h5",
+                        help="Emissivity HDF5 file from compute_emissivity.py")
+    parser.add_argument("-o", "--output", default="validation_comparison.png",
+                        help="Output figure path")
+    parser.add_argument("--fov", type=float, default=10.0,
+                        help="Field of view in kpc (default: 10)")
+    parser.add_argument("--distance", type=float, default=1.0,
+                        help="Distance in Mpc (default: 1.0)")
+    args = parser.parse_args()
+
     print("Loading SKIRT F770W...")
-    skirt_img, npix_skirt = load_skirt_f770w()
-    # skirt_img[skirt_img == 0] = np.min(skirt_img[skirt_img > 0])
-    print(f"  SKIRT image: {npix_skirt}x{npix_skirt}, FOV={FO_FOV_KPC} kpc")
+    skirt_img, npix_skirt = load_skirt_f770w(args.skirt)
+    print(f"  SKIRT image: {npix_skirt}x{npix_skirt}, FOV={args.fov} kpc")
 
     print("Making cell-based face-on projection...")
     _, cell_img = make_projection(
-        EMISSIVITY_H5,
+        args.emissivity,
         inc_deg=0, az_deg=0,
-        fov_kpc=FO_FOV_KPC,
+        fov_kpc=args.fov,
         npix=npix_skirt,
-        distance_Mpc=FO_DISTANCE_MPC,
+        distance_Mpc=args.distance,
     )
     print(f"  Cell image: {cell_img.shape}")
     cell_img = cell_img[:,::-1]
@@ -81,9 +90,9 @@ def main():
 
     # ── Radial profiles ────────────────────────────────────────────────
     iy, ix = np.mgrid[:npix_skirt, :npix_skirt]
-    r_kpc = np.sqrt((ix - npix_skirt/2)**2 + (iy - npix_skirt/2)**2) * FO_FOV_KPC / npix_skirt
+    r_kpc = np.sqrt((ix - npix_skirt/2)**2 + (iy - npix_skirt/2)**2) * args.fov / npix_skirt
 
-    rbins = np.linspace(0, FO_FOV_KPC / 2, 40)
+    rbins = np.linspace(0, args.fov / 2, 40)
     rcenters = 0.5 * (rbins[:-1] + rbins[1:])
 
     skirt_prof = np.zeros(len(rbins) - 1)
@@ -105,7 +114,7 @@ def main():
     print(f"  (multiply C_77 by {alpha:.3f} to match SKIRT)")
 
     # Read current C_77
-    with h5py.File(EMISSIVITY_H5, "r") as f:
+    with h5py.File(args.emissivity, "r") as f:
         C_77_used = f["meta"].attrs["C_77"]
     C_77_calibrated = C_77_used * alpha
     print(f"  C_77 used:       {C_77_used:.3e}")
@@ -114,7 +123,7 @@ def main():
     # ── 3-panel figure ─────────────────────────────────────────────────
     # Zoom to inner 10 kpc for comparison
     zoom_kpc = 10.0
-    half = FO_FOV_KPC / 2
+    half = args.fov / 2
     extent = [-half, half, -half, half]
 
     # Shared color scale from SKIRT
@@ -159,8 +168,8 @@ def main():
     ax.set_xlim(0, zoom_kpc / 2)
 
     # fig.tight_layout()
-    fig.savefig(OUT_FIG, dpi=150, bbox_inches="tight")
-    print(f"\nSaved {OUT_FIG}")
+    fig.savefig(args.output, dpi=150, bbox_inches="tight")
+    print(f"\nSaved {args.output}")
     plt.close(fig)
 
 

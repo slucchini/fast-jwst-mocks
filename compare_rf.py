@@ -6,15 +6,12 @@ We integrate over FUV (912–3000 Å), convert to energy density u, and
 express in Mathis (1983) ISRF units for comparison with our cell-based U.
 """
 
+import argparse
 import numpy as np
 import h5py
 from astropy.io import fits
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-
-# ── Paths ─────────────────────────────────────────────────────────────────
-SKIRT_RF = "../I5_output/smuggle_rf_J_xy.fits"
-EMISSIVITY_FILE = "emissivity_snap190.h5"
 
 # ── Constants ─────────────────────────────────────────────────────────────
 c_cgs = 2.998e10          # cm/s
@@ -122,12 +119,22 @@ def project_U_to_grid(pos, U, M_dust, fov_kpc, npix, dz_kpc=1.0):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Compare geometric U-field against SKIRT RadiationFieldProbe")
+    parser.add_argument("--skirt-rf", default="../I5_output/smuggle_rf_J_xy.fits",
+                        help="SKIRT RadiationFieldProbe FITS file")
+    parser.add_argument("--emissivity", default="emissivity_snap190.h5",
+                        help="Emissivity HDF5 file from compute_emissivity.py")
+    parser.add_argument("-o", "--output", default="compare_rf.png",
+                        help="Output figure path")
+    args = parser.parse_args()
+
     # Load SKIRT radiation field
-    U_skirt, dx_pc, fov_kpc = load_skirt_rf(SKIRT_RF)
+    U_skirt, dx_pc, fov_kpc = load_skirt_rf(args.skirt_rf)
     npix = U_skirt.shape[0]
 
     # Load cell-based estimate
-    pos, U_cell, M_dust = load_cell_U(EMISSIVITY_FILE)
+    pos, U_cell, M_dust = load_cell_U(args.emissivity)
 
     # Project cell U onto same grid
     # Try a few midplane thickness values
@@ -235,8 +242,8 @@ def main():
 
     plt.suptitle("Radiation Field Comparison: Geometric estimate vs SKIRT", fontsize=14)
     plt.tight_layout()
-    plt.savefig("compare_rf.png", dpi=150, bbox_inches='tight')
-    print("\nSaved compare_rf.png")
+    plt.savefig(args.output, dpi=150, bbox_inches='tight')
+    print(f"\nSaved {args.output}")
 
     # Print summary statistics
     print(f"\n{'='*50}")

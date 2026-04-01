@@ -9,7 +9,12 @@ Usage:
 """
 
 import sys
-sys.path = ['/n/home07/slucchini/software/PTS'] + sys.path
+import os
+import argparse
+
+pts_path = os.environ.get("PTS_PATH")
+if pts_path:
+    sys.path.insert(0, pts_path)
 
 import numpy as np
 import h5py
@@ -65,10 +70,6 @@ INSTRUMENTS = [
     },
 ]
 
-EMISSIVITY_H5 = "emissivity_snap190.h5"
-OUT_FIG = "validation_all_angles.png"
-
-
 def load_skirt_f770w(fits_path):
     """Load SKIRT datacube and convolve with MIRI F770W filter."""
     with fits.open(fits_path) as hdul:
@@ -113,6 +114,21 @@ def radial_profile(img, npix, fov_kpc, nbins=40):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Validate cell emissivity against SKIRT at multiple viewing angles")
+    parser.add_argument("--emissivity", default="emissivity_snap190.h5",
+                        help="Emissivity HDF5 file from compute_emissivity.py")
+    parser.add_argument("--skirt-dir", default="../I5_output",
+                        help="Directory containing SKIRT FITS files (default: ../I5_output)")
+    parser.add_argument("-o", "--output", default="validation_all_angles.png",
+                        help="Output figure path")
+    args = parser.parse_args()
+
+    # Update FITS paths relative to --skirt-dir
+    for inst in INSTRUMENTS:
+        basename = os.path.basename(inst["fits"])
+        inst["fits"] = os.path.join(args.skirt_dir, basename)
+
     n_inst = len(INSTRUMENTS)
 
     fig, axes = plt.subplots(3, n_inst, figsize=(4 * n_inst, 12))
@@ -129,7 +145,7 @@ def main():
 
         # Cell projection
         _, cell_img = make_projection(
-            EMISSIVITY_H5,
+            args.emissivity,
             inc_deg=inst["inc"], az_deg=inst["az"],
             fov_kpc=inst["fov_kpc"],
             npix=inst["npix"],
@@ -188,9 +204,9 @@ def main():
         ax.set_xlim(0, zh)
 
     fig.tight_layout()
-    fig.savefig(OUT_FIG, dpi=150, bbox_inches="tight")
+    fig.savefig(args.output, dpi=150, bbox_inches="tight")
     print(f"\n{'='*50}")
-    print(f"Saved {OUT_FIG}")
+    print(f"Saved {args.output}")
     print(f"\nCalibration factors:")
     for name, alpha in all_alphas.items():
         print(f"  {name:10s}: α = {alpha:.3f}")

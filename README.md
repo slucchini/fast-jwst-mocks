@@ -28,17 +28,35 @@ The FUV radiation field uses a three-tier hybrid approach:
 
 Combined as U = max(U_grid, U_near). Stellar FUV luminosities come from BPASS v2 binary population spectra (Chabrier IMF), integrated over 912–3000 Å.
 
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+The validation scripts (`validate.py`, `validate_all.py`) also require [PTS](https://github.com/SKIRT/PTS9) for F770W filter convolution. Set the `PTS_PATH` environment variable to your PTS installation:
+
+```bash
+export PTS_PATH=/path/to/PTS
+```
+
 ## Quick Start
 
 ```bash
 # 1. Compute per-cell emissivity (~75 s)
-python3 compute_emissivity.py
+python3 compute_emissivity.py --snap /path/to/snapshot.hdf5 --bpass /path/to/bpass-spectra.hdf5
 
 # 2. Project to a 2D image at any viewing angle
 python3 project.py --inc 0 --az 0          # face-on
-python3 project.py --inc 27 --az 0         # IC 5332 inclination
 python3 project.py --inc 90 --az 0         # edge-on
+
+# 3. Validate against SKIRT (optional, requires PTS)
+python3 validate.py --skirt /path/to/skirt_output_total.fits
+python3 validate_all.py --skirt-dir /path/to/skirt_output/
+python3 compare_rf.py --skirt-rf /path/to/skirt_output_rf_J_xy.fits
 ```
+
+All scripts accept `--help` for full argument documentation.
 
 ## Scripts
 
@@ -83,9 +101,11 @@ Inner galaxy (r < 5 kpc) shows excellent agreement (α ≈ 1). The outer galaxy 
 
 ## Dependencies
 
-- numpy, scipy, h5py, matplotlib, astropy
+Python packages (see `requirements.txt`): numpy, scipy, h5py, matplotlib, astropy
+
+External data/tools:
 - [BPASS v2](https://bpass.auckland.ac.nz/) binary spectra table (for FUV luminosities)
-- [PTS](https://github.com/SKIRT/PTS9) (validation scripts only, for F770W filter convolution)
+- [PTS](https://github.com/SKIRT/PTS9) (validation scripts only, for F770W filter convolution; set `PTS_PATH` env var)
 
 ## Configuration
 

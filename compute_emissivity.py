@@ -16,11 +16,7 @@ from scipy.spatial import cKDTree
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import map_coordinates
 import time as timer
-
-# ── Paths ──────────────────────────────────────────────────────────────────
-SNAP_PATH  = "../I5_output/snap_190.hdf5"
-OUT_PATH   = "emissivity_snap190.h5"
-BPASS_PATH = "/n/home10/asmith/colt/tables/bpass-spectra-bin-imf_chab100.hdf5"
+import argparse
 
 # ── Physical constants (cgs) ───────────────────────────────────────────────
 c_cgs    = 2.998e10       # speed of light, cm/s
@@ -80,15 +76,24 @@ def _load_bpass_fuv_grid(path):
     return Z_grid, age_myr, L_fuv_grid
 
 
-_BPASS_Z, _BPASS_AGE_MYR, _BPASS_LFUV = _load_bpass_fuv_grid(BPASS_PATH)
-# Build log-space interpolator for smooth behaviour across decades
-_LOG_BPASS_Z   = np.log10(np.maximum(_BPASS_Z, 1e-10))
-_LOG_BPASS_AGE = np.log10(_BPASS_AGE_MYR)
-_LOG_BPASS_LFUV = np.log10(np.maximum(_BPASS_LFUV, 1e-50))
-_BPASS_INTERP = RegularGridInterpolator(
-    (_LOG_BPASS_Z, _LOG_BPASS_AGE), _LOG_BPASS_LFUV,
-    method="linear", bounds_error=False, fill_value=None,
-)
+_BPASS_INTERP = None
+_BPASS_AGE_MYR = None
+_BPASS_Z = None
+
+
+def _init_bpass(bpass_path):
+    """Load BPASS table and build interpolator (called once at runtime)."""
+    global _BPASS_INTERP, _BPASS_AGE_MYR, _BPASS_Z
+    Z_grid, age_myr, L_fuv_grid = _load_bpass_fuv_grid(bpass_path)
+    _BPASS_Z = Z_grid
+    _BPASS_AGE_MYR = age_myr
+    log_Z   = np.log10(np.maximum(Z_grid, 1e-10))
+    log_age = np.log10(age_myr)
+    log_L   = np.log10(np.maximum(L_fuv_grid, 1e-50))
+    _BPASS_INTERP = RegularGridInterpolator(
+        (log_Z, log_age), log_L,
+        method="linear", bounds_error=False, fill_value=None,
+    )
 
 # Radiation field computation
 K_NEAR      = 32       # nearest young stars for near-field correction
@@ -327,11 +332,24 @@ def sobolev_attenuation(gas_mass, gas_rho, gas_Z):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Compute per-cell 7.7 um PAH emissivity from an Arepo/SMUGGLE snapshot")
+    parser.add_argument("--snap", default="../I5_output/snap_190.hdf5",
+                        help="Path to Arepo snapshot (default: ../I5_output/snap_190.hdf5)")
+    parser.add_argument("--bpass", default="/n/home10/asmith/colt/tables/bpass-spectra-bin-imf_chab100.hdf5",
+                        help="Path to BPASS binary spectra HDF5 table")
+    parser.add_argument("-o", "--output", default="emissivity_snap190.h5",
+                        help="Output HDF5 path (default: emissivity_snap190.h5)")
+    args = parser.parse_args()
+
     t_start = timer.time()
+
+    # Load BPASS SED table
+    _init_bpass(args.bpass)
 
     # Load data
     (gas_pos, gas_mass, gas_Z, gas_temp, gas_rho,
-     star_pos, star_mass, star_Z, star_ages_myr) = load_snapshot(SNAP_PATH)
+     star_pos, star_mass, star_Z, star_ages_myr) = load_snapshot(args.snap)
 
     print(f"Gas cells: {len(gas_mass)}, Stars: {len(star_mass)}")
 
@@ -387,8 +405,8 @@ def main():
     print(f"C_77 = {C_77:.3e} erg/s/Msun_dust")
 
     # Save
-    print(f"\nSaving to {OUT_PATH}")
-    with h5py.File(OUT_PATH, "w") as f:
+    print(f"\nSaving to {args.output}")
+    with h5py.File(args.output, "w") as f:
         g = f.create_group("gas")
         g.create_dataset("pos", data=gas_pos, dtype=np.float32)
         g.create_dataset("j_77", data=j_77, dtype=np.float64)
@@ -401,7 +419,7 @@ def main():
 
         m = f.create_group("meta")
         m.attrs["C_77"] = C_77
-        m.attrs["snapshot"] = SNAP_PATH
+        m.attrs["snapshot"] = args.snap
         m.attrs["K_near"] = K_NEAR
         m.attrs["age_cut_myr"] = AGE_CUT_MYR
         m.attrs["dust_mass_fraction"] = DUST_MASS_FRACTION
@@ -409,7 +427,7 @@ def main():
         m.attrs["h_soft_kpc"] = H_SOFT_KPC
         m.attrs["kappa_FUV"] = KAPPA_FUV
         m.attrs["sps_model"] = "BPASS v2 binary, Chabrier IMF"
-        m.attrs["bpass_table"] = BPASS_PATH
+        m.attrs["bpass_table"] = args.bpass
         m.attrs["grid_size"] = GRID_SIZE
         m.attrs["grid_box_kpc"] = GRID_BOX_KPC
         m.attrs["U_method"] = "three-tier: FFT grid + KDTree near-field + adaptive softening"
