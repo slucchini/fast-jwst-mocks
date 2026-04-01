@@ -1,0 +1,19 @@
+# Data files
+*.h5
+*.hdf5
+*.fits
+
+# Output images
+*.png
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# NFS temp files
+.nfs*
