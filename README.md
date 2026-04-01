@@ -68,6 +68,45 @@ All scripts accept `--help` for full argument documentation.
 | `validate_all.py` | Multi-angle validation against 5 SKIRT instruments (face-on, zoom, IC 5332, inc=60°, edge-on) |
 | `compare_rf.py` | Compares geometric U-field against SKIRT `RadiationFieldProbe` output |
 
+## SKIRT Calibration
+
+The `SKIRT_calibration/` directory contains example files for running the SKIRT radiative transfer simulation that the cell-based method is calibrated against:
+
+- **`prep_snap.py`** — Extracts dust (gas cells), old stars (age > 10 Myr), and HII regions (age < 10 Myr) from an Arepo snapshot into SKIRT-compatible text files (`dust_data.txt`, `star_data.txt`, `HII_data.txt`)
+- **`skirt.ski`** — SKIRT 9 configuration with DustEmission mode, stochastic heating, Draine & Li dust mix, Voronoi mesh, MAPPINGS SEDs for HII regions, and Bruzual-Charlot SEDs for old stars
+
+### Running SKIRT
+
+```bash
+cd SKIRT_calibration/
+
+# 1. Place your Arepo snapshot as snapshot.hdf5 (or edit SNAP_PATH in prep_snap.py)
+# 2. Extract SKIRT input files
+python3 prep_snap.py
+
+# 3. Run SKIRT (adjust resources for your system)
+skirt skirt.ski            # serial
+mpirun -np 4 skirt skirt.ski   # parallel
+```
+
+### Key SKIRT Configuration
+
+The `.ski` file defines 5 instruments at different viewing angles, used by `validate_all.py`:
+
+| Instrument | FOV | Pixels | Distance | Inclination |
+|-----------|-----|--------|----------|-------------|
+| `fo` | 40 kpc | 512² | 1 Mpc | 0° (face-on) |
+| `zoom` | 10 kpc | 1024² | 1 Mpc | 0° (face-on) |
+| `ic5332` | 10 kpc | 1024² | 8.84 Mpc | 27° |
+| `inc60` | 40 kpc | 512² | 1 Mpc | 60° |
+| `eo` | 40 kpc | 512² | 1 Mpc | 90° (edge-on) |
+
+Other notable settings:
+- **Dust**: `DraineLiDustMix` with `massFraction=0.3`, `maxTemperature=75000 K`
+- **Wavelength grid**: `NestedLogWavelengthGrid` (90 base + 100 sub-grid in 5.5–14 μm) to properly sample the 7.7 μm PAH feature
+- **Heating**: Stochastic (full SED calculation per cell, not equilibrium)
+- **Probes**: `RadiationFieldProbe` for comparison with geometric U-field estimate
+
 ## Output Format
 
 `emissivity_snap190.h5` contains:

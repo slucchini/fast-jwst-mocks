@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A SKIRT parameter file © Astronomical Observatory, Ghent University -->
+<skirt-simulation-hierarchy type="MonteCarloSimulation" format="9" producer="SKIRT v9.0 (git c991294 built on 19/03/2025 at 15:53:54)" time="2025-12-18T15:13:18.955">
+    <MonteCarloSimulation userLevel="Regular" simulationMode="DustEmission" iteratePrimaryEmission="false" iterateSecondaryEmission="false" numPackets="1e8">
+
+        <random type="Random">
+            <Random seed="0"/>
+        </random>
+        <units type="Units">
+            <ExtragalacticUnits wavelengthOutputStyle="Wavelength" fluxOutputStyle="Frequency"/>
+        </units>
+        <cosmology type="Cosmology">
+            <LocalUniverseCosmology/>
+        </cosmology>
+
+        <sourceSystem type="SourceSystem">
+            <SourceSystem minWavelength="0.09 micron" maxWavelength="100 micron" wavelengths="0.55 micron" sourceBias="0.5">
+                <sources type="Source">
+                    <ParticleSource filename="HII_data.txt" importVelocity="true" importVelocityDispersion="false" importCurrentMass="false" useColumns="" sourceWeight="1" wavelengthBias="0.5">
+                        <smoothingKernel type="SmoothingKernel">
+                            <CubicSplineSmoothingKernel/>
+                        </smoothingKernel>
+                        <sedFamily type="SEDFamily">
+                            <MappingsSEDFamily/>
+                        </sedFamily>
+                        <wavelengthBiasDistribution type="WavelengthDistribution">
+                            <DefaultWavelengthDistribution/>
+                        </wavelengthBiasDistribution>
+                    </ParticleSource>
+                    <ParticleSource filename="star_data.txt" importVelocity="true" importVelocityDispersion="false" importCurrentMass="false" useColumns="" sourceWeight="1" wavelengthBias="0.5">
+                        <smoothingKernel type="SmoothingKernel">
+                            <CubicSplineSmoothingKernel/>
+                        </smoothingKernel>
+                        <sedFamily type="SEDFamily">
+                            <BruzualCharlotSEDFamily imf="Chabrier" resolution="High"/>
+                        </sedFamily>
+                        <wavelengthBiasDistribution type="WavelengthDistribution">
+                            <DefaultWavelengthDistribution/>
+                        </wavelengthBiasDistribution>
+                    </ParticleSource>
+                </sources>
+            </SourceSystem>
+        </sourceSystem>
+
+        <mediumSystem type="MediumSystem">
+            <MediumSystem>
+                <photonPacketOptions type="PhotonPacketOptions">
+                    <PhotonPacketOptions explicitAbsorption="false" forceScattering="true" minWeightReduction="1e4" minScattEvents="0" pathLengthBias="0.5"/>
+                </photonPacketOptions>
+                <radiationFieldOptions type="RadiationFieldOptions">
+                    <RadiationFieldOptions storeRadiationField="true">
+                        <radiationFieldWLG type="DisjointWavelengthGrid">
+                            <LogWavelengthGrid minWavelength="0.09 micron" maxWavelength="100 micron" numWavelengths="50"/>
+                        </radiationFieldWLG>
+                    </RadiationFieldOptions>
+                </radiationFieldOptions>
+                <secondaryEmissionOptions type="SecondaryEmissionOptions">
+                    <SecondaryEmissionOptions storeEmissionRadiationField="false" secondaryPacketsMultiplier="1" spatialBias="0.5" sourceBias="0.5"/>
+                </secondaryEmissionOptions>
+
+                <dustEmissionOptions type="DustEmissionOptions">
+                    <DustEmissionOptions dustEmissionType="Stochastic" includeHeatingByCMB="false" maxFractionOfPrimary="0.01" maxFractionOfPrevious="0.03" sourceWeight="1" wavelengthBias="0.5">
+                        <cellLibrary type="SpatialCellLibrary">
+                            <!-- <FieldStrengthCellLibrary numFieldStrengths="500"/> -->
+                            <AllCellsLibrary/>
+                        </cellLibrary>
+                        <dustEmissionWLG type="DisjointWavelengthGrid">
+                            <NestedLogWavelengthGrid minWavelengthBaseGrid="0.09 micron" maxWavelengthBaseGrid="100 micron" numWavelengthsBaseGrid="90" minWavelengthSubGrid="5.5 micron" maxWavelengthSubGrid="14 micron" numWavelengthsSubGrid="100"/>
+                        </dustEmissionWLG>
+                        <wavelengthBiasDistribution type="WavelengthDistribution">
+                            <DefaultWavelengthDistribution/>
+                        </wavelengthBiasDistribution>
+                    </DustEmissionOptions>
+                </dustEmissionOptions>
+
+                <media type="Medium">
+                    <VoronoiMeshMedium filename="dust_data.txt" minX="-3e4 pc" maxX="3e4 pc" minY="-3e4 pc" maxY="3e4 pc" minZ="-1e4 pc" maxZ="1e4 pc" massType="Mass" massFraction="0.3" importMetallicity="true" importTemperature="true" maxTemperature="75000 K" importVelocity="true" importMagneticField="false" importVariableMixParams="false" useColumns="">
+                        <materialMix type="MaterialMix">
+                            <DraineLiDustMix numSilicateSizes="5" numGraphiteSizes="5" numPAHSizes="15"/>
+                        </materialMix>
+                    </VoronoiMeshMedium>
+                </media>
+
+                <samplingOptions type="SamplingOptions">
+                    <SamplingOptions numDensitySamples="100" numPropertySamples="1" aggregateVelocity="Average"/>
+                </samplingOptions>
+                <grid type="SpatialGrid">
+                    <VoronoiMeshSpatialGrid minX="-3e4 pc" maxX="3e4 pc" minY="-3e4 pc" maxY="3e4 pc" minZ="-1e4 pc" maxZ="1e4 pc" policy="ImportedMesh" relaxSites="false"/>
+                </grid>
+            </MediumSystem>
+        </mediumSystem>
+
+        <instrumentSystem type="InstrumentSystem">
+            <InstrumentSystem>
+                <defaultWavelengthGrid type="WavelengthGrid">
+                    <NestedLogWavelengthGrid minWavelengthBaseGrid="0.09 micron" maxWavelengthBaseGrid="100 micron" numWavelengthsBaseGrid="90" minWavelengthSubGrid="5.5 micron" maxWavelengthSubGrid="14 micron" numWavelengthsSubGrid="100"/>
+                </defaultWavelengthGrid>
+                <instruments type="Instrument">
+                    <FrameInstrument instrumentName="fo" distance="1 Mpc" inclination="0 deg" azimuth="0 deg" roll="0 deg" fieldOfViewX="4e4 pc" numPixelsX="512" centerX="0 pc" fieldOfViewY="4e4 pc" numPixelsY="512" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
+                    <FrameInstrument instrumentName="zoom" distance="1 Mpc" inclination="0 deg" azimuth="0 deg" roll="0 deg" fieldOfViewX="1e4 pc" numPixelsX="1024" centerX="0 pc" fieldOfViewY="1e4 pc" numPixelsY="1024" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
+                    <FrameInstrument instrumentName="ic5332" distance="8.84 Mpc" inclination="27 deg" azimuth="0 deg" roll="0 deg" fieldOfViewX="1e4 pc" numPixelsX="1024" centerX="0 pc" fieldOfViewY="1e4 pc" numPixelsY="1024" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
+                    <FrameInstrument instrumentName="inc60" distance="1 Mpc" inclination="60 deg" azimuth="0 deg" roll="0 deg" fieldOfViewX="4e4 pc" numPixelsX="512" centerX="0 pc" fieldOfViewY="4e4 pc" numPixelsY="512" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
+                    <FrameInstrument instrumentName="eo" distance="1 Mpc" inclination="90 deg" azimuth="0 deg" roll="0 deg" fieldOfViewX="4e4 pc" numPixelsX="512" centerX="0 pc" fieldOfViewY="4e4 pc" numPixelsY="512" centerY="0 pc" recordComponents="true" numScatteringLevels="0" recordPolarization="false" recordStatistics="false"/>
+                </instruments>
+            </InstrumentSystem>
+        </instrumentSystem>
+
+        <probeSystem type="ProbeSystem">
+            <ProbeSystem>
+                <probes type="Probe">
+                    <ConvergenceInfoProbe probeName="cnv" wavelength="0.55 micron" probeAfter="Setup"/>
+                    <ConvergenceCutsProbe probeName="dns" probeAfter="Setup"/>
+                    <RadiationFieldProbe probeName="rf" writeWavelengthGrid="true" probeAfter="Run"/>
+                </probes>
+            </ProbeSystem>
+        </probeSystem>
+
+    </MonteCarloSimulation>
+</skirt-simulation-hierarchy>
