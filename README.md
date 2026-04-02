@@ -126,6 +126,8 @@ Metadata in `/meta/` stores all physics parameters for reproducibility.
 
 ## Validation
 
+![Validation comparison: SKIRT vs cell-based projection](validation_comparison.png)
+
 Validated against full SKIRT radiative transfer at multiple viewing angles:
 
 | Instrument | FOV | Inclination | α (SKIRT/Cell) |

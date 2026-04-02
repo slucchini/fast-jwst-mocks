@@ -5,6 +5,7 @@
 
 # Output images
 *.png
+!validation_comparison.png
 
 # Python
 __pycache__/

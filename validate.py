@@ -132,32 +132,39 @@ def main():
     # vmax = np.percentile(skirt_pos, 99.5) if len(skirt_pos) else 10.0
     vmin, vmax = 1e-2, 60
 
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    fig, axes = plt.subplots(1, 4, figsize=(16, 5.5), width_ratios=[1,1,0.2,1])
+    plt.subplots_adjust(wspace=0.02)
+    axes[2].remove()
 
     # Panel 1: SKIRT
     ax = axes[0]
-    im = ax.imshow(skirt_img, origin="lower", extent=extent,
-                   norm=LogNorm(vmin=vmin, vmax=vmax), cmap="inferno")
+    skirt_img_fill = np.copy(skirt_img)
+    skirt_img_fill[skirt_img==0] = np.min(skirt_img[skirt_img>0])
+    im = ax.imshow(skirt_img_fill, origin="lower", extent=extent,
+                norm=LogNorm(vmin=vmin, vmax=vmax), cmap="inferno")
     ax.set_xlim(-zoom_kpc/2, zoom_kpc/2)
     ax.set_ylim(-zoom_kpc/2, zoom_kpc/2)
     ax.set_xlabel("x (kpc)")
     ax.set_ylabel("y (kpc)")
-    ax.set_title("SKIRT F770W")
+    ax.text(0.02,0.98,"SKIRT F770W",va='top',transform=ax.transAxes,c='w',fontsize=14)
 
     # Panel 2: Cell-based (scaled by alpha)
     ax = axes[1]
-    ax.imshow(cell_img * alpha, origin="lower", extent=extent,
-              norm=LogNorm(vmin=vmin, vmax=vmax), cmap="inferno")
+    cell_img_fill = np.copy(cell_img * alpha)
+    cell_img_fill[cell_img==0] = np.min(cell_img[cell_img>0])
+    ax.imshow(cell_img_fill, origin="lower", extent=extent,
+            norm=LogNorm(vmin=vmin, vmax=vmax), cmap="inferno")
     ax.set_xlim(-zoom_kpc/2, zoom_kpc/2)
     ax.set_ylim(-zoom_kpc/2, zoom_kpc/2)
     ax.set_xlabel("x (kpc)")
     ax.set_ylabel("")
-    ax.set_title(f"Cell emissivity (×{alpha:.2f})")
+    ax.text(0.98,0.98,f"Cell emissivity (×{alpha:.2f})",va='top',ha='right',transform=ax.transAxes,c='w',fontsize=14)
+    ax.set_yticklabels([])
 
-    fig.colorbar(im, ax=axes[:2], location='top', label="MJy/sr", fraction=0.05, pad=0.02)
+    fig.colorbar(im, ax=axes[:2], location='top', label="MJy/sr", fraction=0.03, pad=0.05, aspect=50)
 
     # Panel 3: Radial profiles
-    ax = axes[2]
+    ax = axes[-1]
     ax.semilogy(rcenters, skirt_prof, "k-", lw=2, label="SKIRT")
     ax.semilogy(rcenters, cell_prof, "r--", lw=1.5, label="Cell (raw)")
     ax.semilogy(rcenters, cell_prof * alpha, "r-", lw=2, label=f"Cell (×{alpha:.2f})")
@@ -166,6 +173,10 @@ def main():
     ax.set_title("Radial Profiles")
     ax.legend(fontsize=9)
     ax.set_xlim(0, zoom_kpc / 2)
+
+    box1 = axes[1].get_position()
+    box2 = ax.get_position()
+    ax.set_position([box2.x0,box1.y0,box2.width,box1.height])
 
     # fig.tight_layout()
     fig.savefig(args.output, dpi=150, bbox_inches="tight")
