@@ -2,13 +2,15 @@
 Project per-cell 7.7 um emissivities onto 2D images from arbitrary viewing angles.
 
 Usage:
-    python project.py                          # face-on
+    python project.py                          # face-on (histogram)
     python project.py --inc 27 --az 0          # IC 5332 inclination
     python project.py --inc 60 --az 45         # arbitrary view
+    python project.py --vortrace               # Voronoi projection (requires vortrace)
 """
 
 import numpy as np
 import h5py
+import time
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import argparse
@@ -111,6 +113,89 @@ def make_projection(h5_path, inc_deg=0, az_deg=0,
     return image_lum, image_MJy_sr
 
 
+def make_projection_vortrace(h5_path, inc_deg=0, az_deg=0,
+                             fov_kpc=10.0, npix=512, distance_Mpc=8.84):
+    """Project cell emissivities using vortrace Voronoi line integration.
+
+    Unlike the histogram method, this traces rays through the Voronoi mesh
+    and integrates emissivity density along each line of sight, properly
+    handling the cell geometry.
+
+    Parameters
+    ----------
+    h5_path : str
+        Path to emissivity HDF5 file from compute_emissivity.py
+    inc_deg, az_deg : float
+        Viewing angles in degrees (0,0 = face-on)
+    fov_kpc : float
+        Field of view (side length) in kpc
+    npix : int
+        Number of pixels per side
+    distance_Mpc : float
+        Distance to galaxy in Mpc (for converting to MJy/sr)
+
+    Returns
+    -------
+    image_lum : (npix, npix) array
+        Surface brightness in erg/s/kpc^2
+    image_MJy_sr : (npix, npix) array
+        Surface brightness in MJy/sr
+    """
+    import vortrace as vt
+
+    # Load emissivity data and cell volumes
+    with h5py.File(h5_path, "r") as f:
+        pos     = f["gas/pos"][:]      # (N, 3) kpc, centered on stellar COM
+        j_77    = f["gas/j_77"][:]     # (N,) erg/s
+        vol_kpc3 = f["gas/volume"][:]  # (N,) kpc^3
+
+    # Emissivity density: erg/s/kpc^3
+    j_density = j_77 / vol_kpc3
+
+    # Set up vortrace projection cloud
+    half = fov_kpc / 2.0
+    depth = half  # kpc, integration depth (equal to fov)
+    # bbox = [pos[:, 0].min(), pos[:, 0].max(),
+    #         pos[:, 1].min(), pos[:, 1].max(),
+    #         pos[:, 2].min(), pos[:, 2].max()]
+    bbox = [-fov_kpc, fov_kpc,
+            -fov_kpc, fov_kpc,
+            -fov_kpc, fov_kpc]
+
+    print("Building projection cloud...")
+    stime = time.time()
+    pc = vt.ProjectionCloud(pos, j_density, boundbox=bbox, vol=vol_kpc3)
+    print("done ({:.2f} s)".format(time.time() - stime))
+
+    # Grid extent and integration bounds (centered on origin)
+    extent = [-half, half]
+    bounds = [-depth, depth]
+    center = [0.0, 0.0, 0.0]
+
+    # vortrace uses Tait-Bryan angles: yaw = azimuth, pitch = inclination
+    yaw   = np.radians(az_deg)
+    pitch = np.radians(inc_deg)
+
+    print("Making grid projection...")
+    stime = time.time()
+    image = pc.grid_projection(extent, npix, bounds, center,
+                               yaw=yaw, pitch=pitch,
+                               reduction='integrate')
+    print("done ({:.2f} s)".format(time.time() - stime))
+
+    # image is in erg/s/kpc^2 (line integral of erg/s/kpc^3 over kpc)
+    image_lum = image.T  # transpose to (y, x) for imshow
+
+    # Convert to MJy/sr
+    D_cm = distance_Mpc * Mpc_cm
+    pixel_kpc = fov_kpc / npix
+    pixel_sr = (pixel_kpc * kpc_cm / D_cm)**2
+    image_MJy_sr = image_lum * pixel_kpc**2 / (
+        4.0 * np.pi * D_cm**2 * DELTA_NU_77) / pixel_sr / MJy_cgs
+
+    return image_lum, image_MJy_sr
+
+
 def plot_projection(image_MJy_sr, fov_kpc=10.0, inc_deg=0, az_deg=0,
                     vmin=None, vmax=None, out_path=None):
     """Plot a single projection image."""
@@ -155,10 +240,17 @@ def main():
     parser.add_argument("--npix", type=int, default=512, help="Pixels per side")
     parser.add_argument("--dist", type=float, default=8.84, help="Distance in Mpc")
     parser.add_argument("-o", "--output", default=None, help="Output PNG path")
+    parser.add_argument("--vortrace", action="store_true",
+                        help="Use vortrace Voronoi projection (requires vortrace)")
     args = parser.parse_args()
 
-    _, image_MJy_sr = make_projection(
-        args.h5, args.inc, args.az, args.fov, args.npix, args.dist)
+    if args.vortrace:
+        _, image_MJy_sr = make_projection_vortrace(
+            args.h5, args.inc, args.az,
+            args.fov, args.npix, args.dist)
+    else:
+        _, image_MJy_sr = make_projection(
+            args.h5, args.inc, args.az, args.fov, args.npix, args.dist)
 
     out = args.output or f"proj_inc{args.inc:.0f}_az{args.az:.0f}.png"
     plot_projection(image_MJy_sr, args.fov, args.inc, args.az, out_path=out)

@@ -3,3 +3,6 @@ scipy
 h5py
 matplotlib
 astropy
+
+# Optional: Voronoi mesh projection (pip install from https://github.com/gusbeane/vortrace)
+# vortrace

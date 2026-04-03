@@ -4,7 +4,7 @@ Fast mock JWST MIRI F770W images from Arepo/SMUGGLE galaxy simulations — no ra
 
 ## Overview
 
-This code computes a per-gas-cell 7.7 μm emissivity from an Arepo/SMUGGLE snapshot, enabling instant mock JWST MIRI F770W images from arbitrary viewing angles via 2D histogram projection. It replaces expensive SKIRT radiative transfer (~10 hr) with a ~75 second calculation.
+This code computes a per-gas-cell 7.7 μm emissivity from an Arepo/SMUGGLE snapshot, enabling instant mock JWST MIRI F770W images from arbitrary viewing angles via 2D histogram projection or [vortrace](https://github.com/gusbeane/vortrace) Voronoi line integration. It replaces expensive SKIRT radiative transfer (~10 hr) with a ~75 second calculation.
 
 The key physics:
 
@@ -47,8 +47,9 @@ export PTS_PATH=/path/to/PTS
 python3 compute_emissivity.py --snap /path/to/snapshot.hdf5 --bpass /path/to/bpass-spectra.hdf5
 
 # 2. Project to a 2D image at any viewing angle
-python3 project.py --inc 0 --az 0          # face-on
+python3 project.py --inc 0 --az 0          # face-on (histogram)
 python3 project.py --inc 90 --az 0         # edge-on
+python3 project.py --vortrace --inc 27     # Voronoi projection (requires vortrace)
 
 # 3. Validate against SKIRT (optional, requires PTS)
 python3 validate.py --skirt /path/to/skirt_output_total.fits
@@ -63,7 +64,7 @@ All scripts accept `--help` for full argument documentation.
 | Script | Purpose |
 |--------|---------|
 | `compute_emissivity.py` | Reads Arepo snapshot, computes FUV radiation field and per-cell 7.7 μm emissivity, saves to HDF5 |
-| `project.py` | Projects emissivities onto 2D images at arbitrary (inclination, azimuth), outputs MJy/sr surface brightness |
+| `project.py` | Projects emissivities onto 2D images at arbitrary (inclination, azimuth) via histogram or vortrace Voronoi integration (`--vortrace`), outputs MJy/sr surface brightness |
 | `validate.py` | Compares face-on projection against SKIRT F770W output with radial profiles |
 | `validate_all.py` | Multi-angle validation against 5 SKIRT instruments (face-on, zoom, IC 5332, inc=60°, edge-on) |
 | `compare_rf.py` | Compares geometric U-field against SKIRT `RadiationFieldProbe` output |
@@ -121,6 +122,7 @@ Other notable settings:
 | `/gas/metallicity` | (N,) | Absolute metallicity |
 | `/gas/f_att` | (N,) | Sobolev attenuation factor (0–1) |
 | `/gas/tau_fuv` | (N,) | FUV optical depth through cell |
+| `/gas/volume` | (N,) | Cell volume in kpc³ |
 
 Metadata in `/meta/` stores all physics parameters for reproducibility.
 
@@ -143,6 +145,9 @@ Inner galaxy (r < 5 kpc) shows excellent agreement (α ≈ 1). The outer galaxy 
 ## Dependencies
 
 Python packages (see `requirements.txt`): numpy, scipy, h5py, matplotlib, astropy
+
+Optional:
+- [vortrace](https://github.com/gusbeane/vortrace) — Voronoi mesh line integration for `project.py --vortrace`
 
 External data/tools:
 - [BPASS v2](https://bpass.auckland.ac.nz/) binary spectra table (for FUV luminosities)

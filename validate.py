@@ -8,6 +8,7 @@ Produces a 3-panel figure:
 
 Usage:
     python validate.py
+    python validate.py --vortrace   # use vortrace Voronoi projection
 """
 
 import sys
@@ -26,7 +27,7 @@ from astropy.io import fits
 import pts.band as bnd
 import astropy.units as u
 
-from project import make_projection
+from project import make_projection, make_projection_vortrace
 
 
 def load_skirt_f770w(fits_path):
@@ -70,38 +71,53 @@ def main():
                         help="Field of view in kpc (default: 10)")
     parser.add_argument("--distance", type=float, default=1.0,
                         help="Distance in Mpc (default: 1.0)")
+    parser.add_argument("--vortrace", action="store_true",
+                        help="Use vortrace Voronoi projection instead of histogram")
+    parser.add_argument("--proj_npix", type=int, default=200,
+                        help="Number of pixels for the projection (histogram or vortrace)")
     args = parser.parse_args()
 
     print("Loading SKIRT F770W...")
     skirt_img, npix_skirt = load_skirt_f770w(args.skirt)
     print(f"  SKIRT image: {npix_skirt}x{npix_skirt}, FOV={args.fov} kpc")
+    skirt_img[skirt_img==0] = np.nan
 
-    print("Making cell-based face-on projection...")
-    _, cell_img = make_projection(
+    method = "vortrace" if args.vortrace else "histogram"
+    print(f"Making cell-based face-on projection ({method})...")
+    proj_func = make_projection_vortrace if args.vortrace else make_projection
+    _, cell_img = proj_func(
         args.emissivity,
         inc_deg=0, az_deg=0,
         fov_kpc=args.fov,
-        npix=npix_skirt,
+        npix=args.proj_npix,
         distance_Mpc=args.distance,
     )
     print(f"  Cell image: {cell_img.shape}")
     cell_img = cell_img[:,::-1]
     # cell_img[cell_img == 0] = np.min(cell_img[cell_img > 0])
+    cell_img[cell_img==0] = np.nan
 
     # ── Radial profiles ────────────────────────────────────────────────
     iy, ix = np.mgrid[:npix_skirt, :npix_skirt]
     r_kpc = np.sqrt((ix - npix_skirt/2)**2 + (iy - npix_skirt/2)**2) * args.fov / npix_skirt
+    iy, ix = np.mgrid[:args.proj_npix, :args.proj_npix]
+    r_kpc_cell = np.sqrt((ix - args.proj_npix/2)**2 + (iy - args.proj_npix/2)**2) * args.fov / args.proj_npix
 
     rbins = np.linspace(0, args.fov / 2, 40)
     rcenters = 0.5 * (rbins[:-1] + rbins[1:])
 
     skirt_prof = np.zeros(len(rbins) - 1)
+    skirt_err = np.zeros((len(rbins) - 1, 2))
     cell_prof  = np.zeros(len(rbins) - 1)
+    cell_err = np.zeros((len(rbins) - 1, 2))
 
     for i in range(len(rbins) - 1):
         mask = (r_kpc >= rbins[i]) & (r_kpc < rbins[i+1])
         skirt_prof[i] = np.nanmean(skirt_img[mask]) if np.any(mask) else np.nan
+        skirt_err[i] = [np.nanpercentile(skirt_img[mask],q) for q in [16,84]]
+        mask = (r_kpc_cell >= rbins[i]) & (r_kpc_cell < rbins[i+1])
         cell_prof[i] = np.nanmean(cell_img[mask]) if np.any(mask) else np.nan
+        cell_err[i] = [np.nanpercentile(cell_img[mask],q) for q in [16,84]]
 
     # Fit calibration factor using inner region (r < 5 kpc)
     inner = (rcenters < 5) & np.isfinite(skirt_prof) & np.isfinite(cell_prof) & (cell_prof > 0)
@@ -139,7 +155,7 @@ def main():
     # Panel 1: SKIRT
     ax = axes[0]
     skirt_img_fill = np.copy(skirt_img)
-    skirt_img_fill[skirt_img==0] = np.min(skirt_img[skirt_img>0])
+    skirt_img_fill[~np.isfinite(skirt_img)] = np.min(skirt_img[skirt_img>0])
     im = ax.imshow(skirt_img_fill, origin="lower", extent=extent,
                 norm=LogNorm(vmin=vmin, vmax=vmax), cmap="inferno")
     ax.set_xlim(-zoom_kpc/2, zoom_kpc/2)
@@ -151,14 +167,15 @@ def main():
     # Panel 2: Cell-based (scaled by alpha)
     ax = axes[1]
     cell_img_fill = np.copy(cell_img * alpha)
-    cell_img_fill[cell_img==0] = np.min(cell_img[cell_img>0])
+    cell_img_fill[~np.isfinite(cell_img)] = np.min(cell_img[cell_img>0])
     ax.imshow(cell_img_fill, origin="lower", extent=extent,
             norm=LogNorm(vmin=vmin, vmax=vmax), cmap="inferno")
     ax.set_xlim(-zoom_kpc/2, zoom_kpc/2)
     ax.set_ylim(-zoom_kpc/2, zoom_kpc/2)
     ax.set_xlabel("x (kpc)")
     ax.set_ylabel("")
-    ax.text(0.98,0.98,f"Cell emissivity (×{alpha:.2f})",va='top',ha='right',transform=ax.transAxes,c='w',fontsize=14)
+    label = f"Cell {'vortrace' if args.vortrace else 'histogram'} (×{alpha:.2f})"
+    ax.text(0.98,0.98,label,va='top',ha='right',transform=ax.transAxes,c='w',fontsize=14)
     ax.set_yticklabels([])
 
     fig.colorbar(im, ax=axes[:2], location='top', label="MJy/sr", fraction=0.03, pad=0.05, aspect=50)
@@ -166,8 +183,10 @@ def main():
     # Panel 3: Radial profiles
     ax = axes[-1]
     ax.semilogy(rcenters, skirt_prof, "k-", lw=2, label="SKIRT")
+    ax.fill_between(rcenters, *skirt_err.T, ec='none', fc = 'k', alpha=0.05)
     ax.semilogy(rcenters, cell_prof, "r--", lw=1.5, label="Cell (raw)")
     ax.semilogy(rcenters, cell_prof * alpha, "r-", lw=2, label=f"Cell (×{alpha:.2f})")
+    ax.fill_between(rcenters, *(cell_err * alpha).T, ec='none', fc='r', alpha=0.05)
     ax.set_xlabel("r (kpc)")
     ax.set_ylabel("Surface Brightness (MJy/sr)")
     ax.set_title("Radial Profiles")

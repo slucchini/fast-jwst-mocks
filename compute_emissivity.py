@@ -142,7 +142,10 @@ def load_snapshot(path):
     code_time_to_myr = kpc_cm / 1e5 / (3.156e7 * 1e6)  # 977.8
     star_ages_myr = (header_time - star_gage) * code_time_to_myr
 
-    return (gas_pos, gas_mass, gas_Z, gas_temp, gas_rho,
+    # Cell volumes in kpc^3: V = M / ρ in cgs, then convert to kpc^3
+    gas_vol = gas_mass * Msun_g / gas_rho / kpc_cm**3  # kpc^3
+
+    return (gas_pos, gas_mass, gas_Z, gas_temp, gas_rho, gas_vol,
             star_pos, star_mass, star_Z, star_ages_myr)
 
 
@@ -349,7 +352,7 @@ def main():
     _init_bpass(args.bpass)
 
     # Load data
-    (gas_pos, gas_mass, gas_Z, gas_temp, gas_rho,
+    (gas_pos, gas_mass, gas_Z, gas_temp, gas_rho, gas_vol,
      star_pos, star_mass, star_Z, star_ages_myr) = load_snapshot(args.snap)
 
     print(f"Gas cells: {len(gas_mass)}, Stars: {len(star_mass)}")
@@ -417,6 +420,7 @@ def main():
         g.create_dataset("metallicity", data=gas_Z, dtype=np.float32)
         g.create_dataset("f_att", data=f_att, dtype=np.float32)
         g.create_dataset("tau_fuv", data=tau_fuv, dtype=np.float32)
+        g.create_dataset("volume", data=gas_vol, dtype=np.float32)
 
         m = f.create_group("meta")
         m.attrs["C_77"] = C_77
