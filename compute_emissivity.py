@@ -119,9 +119,10 @@ def load_snapshot(path):
         gas_pos  = f["PartType0/Coordinates"][:]       # kpc (code units)
         gas_mass = f["PartType0/Masses"][:] * 1e10      # Msun
         gas_Z    = f["PartType0/GFM_Metallicity"][:]    # absolute
+        gas_XH   = f["PartType0/GFM_Metals"][:,0]
         gas_temp = f["PartType0/InternalEnergy"][:]     # code units (need conversion)
         gas_rho  = f["PartType0/Density"][:] * 1e10 * Msun_g / kpc_cm**3  # g/cm^3
-        gas_mu   = 4.0 / (1.0 + 3 * 0.76 + 4 * 0.76 * f["PartType0/ElectronAbundance"][:])
+        gas_mu   = 4.0 / (1.0 + 3 * gas_XH + 4 * gas_XH * f["PartType0/ElectronAbundance"][:])
         # T = (gamma-1) * u * mu * m_H / k_B, code velocity^2 → (km/s)^2
         k_B_cgs = 1.381e-16
         gas_temp = (2.0 / 3.0) * gas_temp * 1e10 * gas_mu * m_H / k_B_cgs  # K
